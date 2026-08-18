@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Alert, Platform, ScrollView, Animated } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing, radius } from '../theme';
@@ -31,6 +31,20 @@ const PRESETS: { label: string; hour: number; minute: number }[] = [
   { label: 'Wind-down', hour: 20, minute: 0 },
 ];
 
+// Rotates in the headline slot so the screen doesn't feel static on repeat
+// visits. Same voice/energy as the rest of the copy (and reuses phrasing we
+// already validated in the smoke-test ad hooks) rather than introducing a
+// new tone.
+const TAGLINES = [
+  "Your nervous system doesn't know a deadline from a tiger.",
+  "Dysregulated again? There's a 90-second fix for that.",
+  "Your urgency is not your body's emergency.",
+  'No 20-minute meditation. Just 90 seconds and a breath.',
+  'Reset your system before it resets you.',
+  'Regulate first. Everything else can wait 90 seconds.',
+];
+const TAGLINE_ROTATE_MS = 60000; // once a minute — enough time to actually read it
+
 function timeFor(hour: number, minute: number): Date {
   const d = new Date();
   d.setHours(hour, minute, 0, 0);
@@ -50,6 +64,9 @@ export default function HomeScreen({ onStartReset }: Props) {
   const [showAndroidPicker, setShowAndroidPicker] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const [taglineIndex, setTaglineIndex] = useState(() => Math.floor(Math.random() * TAGLINES.length));
+  const taglineOpacity = useRef(new Animated.Value(1)).current;
+
   const refresh = useCallback(() => {
     getStreak().then(setStreak);
     getRecentCompletionDays(7).then(setRecentDays);
@@ -64,6 +81,16 @@ export default function HomeScreen({ onStartReset }: Props) {
       }
     });
   }, [refresh]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      Animated.timing(taglineOpacity, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
+        setTaglineIndex((i) => (i + 1) % TAGLINES.length);
+        Animated.timing(taglineOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+      });
+    }, TAGLINE_ROTATE_MS);
+    return () => clearInterval(interval);
+  }, [taglineOpacity]);
 
   function applyPreset(preset: { hour: number; minute: number }) {
     setTime(timeFor(preset.hour, preset.minute));
@@ -128,11 +155,13 @@ export default function HomeScreen({ onStartReset }: Props) {
   const nextFireLabel = describeNextFire(time.getHours(), time.getMinutes());
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <Text style={styles.eyebrow}>90-SECOND RESET</Text>
-      <Text style={styles.title}>
-        Your nervous system doesn't know{'\n'}a deadline from a tiger.
-      </Text>
+      <View style={styles.titleWrap}>
+        <Animated.Text style={[styles.title, { opacity: taglineOpacity }]}>
+          {TAGLINES[taglineIndex]}
+        </Animated.Text>
+      </View>
 
       {streak > 0 && (
         <View style={styles.streakPill}>
@@ -160,7 +189,7 @@ export default function HomeScreen({ onStartReset }: Props) {
 
       <View style={styles.divider} />
 
-      <Text style={styles.sectionLabel}>Reminder — a gentle notification (not a loud alarm yet)</Text>
+      <Text style={styles.sectionLabel}>Reminder — a gentle notification, not a loud alarm yet</Text>
 
       {/* Always-visible status — this is the single source of truth for "is
           something actually scheduled right now," independent of whatever
@@ -232,41 +261,50 @@ export default function HomeScreen({ onStartReset }: Props) {
       </Pressable>
 
       <Text style={styles.note}>
-        This plays your phone's normal notification sound — it can still be missed in Silent Mode.
-        A true alarm-style ring that breaks through silence is on the roadmap; see the docs folder.
+        Uses your phone's normal notification sound — can still be missed in Silent Mode. A true
+        alarm-style ring is on the roadmap.
       </Text>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scroll: {
     flex: 1,
     backgroundColor: colors.sand,
+  },
+  container: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
   },
   eyebrow: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: colors.sage,
     letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  titleWrap: {
+    minHeight: 56,
+    justifyContent: 'center',
     marginBottom: spacing.sm,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.ink,
     textAlign: 'center',
-    marginBottom: spacing.md,
+    lineHeight: 26,
   },
   streakPill: {
     backgroundColor: colors.card,
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   streakText: {
     fontSize: 13,
@@ -276,11 +314,11 @@ const styles = StyleSheet.create({
   historyRow: {
     flexDirection: 'row',
     gap: 6,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   historyDot: {
-    width: 10,
-    height: 10,
+    width: 9,
+    height: 9,
     borderRadius: radius.pill,
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -296,39 +334,39 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     backgroundColor: colors.sage,
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: spacing.xxl,
     borderRadius: radius.md,
   },
   primaryBtnText: {
     color: '#fff',
     fontWeight: '700',
-    fontSize: 18,
+    fontSize: 17,
   },
   primaryBtnCaption: {
     fontSize: 11,
     color: colors.inkSoft,
     marginTop: spacing.xs,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
   },
   divider: {
     width: '100%',
     height: 1,
     backgroundColor: '#dfe6e1',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.inkSoft,
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
   statusPill: {
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     borderWidth: 1,
   },
   statusPillOn: {
@@ -352,10 +390,10 @@ const styles = StyleSheet.create({
   presetRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   presetChip: {
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.card,
     borderRadius: radius.pill,
@@ -366,36 +404,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   wheelPicker: {
-    height: 140,
-    width: 220,
+    height: 110,
+    width: 210,
   },
   androidTimeBtn: {
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: spacing.lg,
     backgroundColor: colors.card,
     borderRadius: radius.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   androidTimeBtnText: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
     color: colors.ink,
   },
   nextFire: {
     fontSize: 12,
     color: colors.inkSoft,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   unsavedNote: {
     fontSize: 12,
     color: colors.warm,
     fontWeight: '600',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     textAlign: 'center',
   },
   saveBtn: {
     backgroundColor: colors.sage,
-    paddingVertical: 12,
+    paddingVertical: 11,
     paddingHorizontal: spacing.xl,
     borderRadius: radius.md,
     marginTop: spacing.xs,
@@ -410,7 +448,7 @@ const styles = StyleSheet.create({
   },
   turnOffLink: {
     marginTop: spacing.xs,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: spacing.lg,
   },
   turnOffLinkText: {
@@ -423,10 +461,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.inkSoft,
     textDecorationLine: 'underline',
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   note: {
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     fontSize: 11,
     color: colors.inkSoft,
     textAlign: 'center',

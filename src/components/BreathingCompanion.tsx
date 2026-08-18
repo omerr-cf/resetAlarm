@@ -10,22 +10,25 @@ import { colors } from '../theme';
  * keep it to one simple shape + a couple of expressions rather than a full
  * illustrated character — the goal is a calm presence, not cuteness.
  *
- * v2 → v3 refinements (gentler, more "alive"):
- * - A soft radial-gradient "aura" glows and softens on hold/exhale, instead
- *   of a flat-filled circle — reads as warmth, not a static icon.
- * - Eyes cross-fade between an open ellipse and a friendly closed "ᴗ" curve
- *   (rather than squashing one ellipse thin), which reads as a genuine soft
- *   smile-with-the-eyes instead of just "closed."
- * - Faint blush appears on hold/exhale — a small but real warmth cue.
- * - All transitions use an eased curve (not linear), so motion feels organic
- * rather than mechanical.
+ * v4: each of the three breathing phases now has its own distinct
+ * expression, driven by a single `phaseValue` (0 = inhale, 1 = hold,
+ * 2 = exhale) so every property — eyes, mouth, blush size/opacity, aura —
+ * eases smoothly between three real keyframes instead of one on/off state:
+ * - **Inhale**: calm open eyes, mouth rounds into a soft "O" as if drawing
+ *   breath in. No blush yet.
+ * - **Hold**: eyes ease shut into a friendly "ᴗ" curve, mouth settles into
+ *   a slight smile, blush blooms to its fullest.
+ * - **Exhale**: same relaxed eyes/smile as hold, but blush recedes a little
+ *   — reads as a soft release rather than a flat repeat of "hold."
  *
- * Why SVG + Animated instead of Lottie: a good Lottie file is normally
- * authored visually (After Effects/Bodymovin) — hand-writing the keyframe
- * JSON blind risks a broken or stiff-looking result with no native
- * dependency benefit. This component gets the same "designed motion" feel
- * while staying fully type-checked, dependency-free, and easy to keep
- * tuning by eye.
+ * Why SVG + Animated instead of Lottie: this animation's whole point is
+ * being frame-synced to the *actual* inhale/hold/exhale timers running in
+ * BreathingScreen (4s/2s/6s), which can change. Lottie is at its best as a
+ * pre-baked, self-contained loop (e.g. a one-shot celebration burst) —
+ * driving one from external, variable-duration JS state means fighting the
+ * format rather than benefiting from it. This component gets the same
+ * "designed motion" feel while staying perfectly in sync, fully
+ * type-checked, and dependency-free.
  */
 
 const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
@@ -34,35 +37,45 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export type BreathingCompanionPhase = 'inhale' | 'hold' | 'exhale';
 
+const PHASE_INDEX: Record<BreathingCompanionPhase, number> = { inhale: 0, hold: 1, exhale: 2 };
+
 type Props = {
   phase: BreathingCompanionPhase;
   size?: number;
 };
 
 export default function BreathingCompanion({ phase, size = 180 }: Props) {
-  // 0 = inhale (open, alert, bright) · 1 = hold/exhale (settled, soft, closed)
-  const settle = useRef(new Animated.Value(0)).current;
+  const phaseValue = useRef(new Animated.Value(PHASE_INDEX[phase])).current;
 
   useEffect(() => {
-    const isSettled = phase === 'hold' || phase === 'exhale';
-    Animated.timing(settle, {
-      toValue: isSettled ? 1 : 0,
-      duration: 900,
+    Animated.timing(phaseValue, {
+      toValue: PHASE_INDEX[phase],
+      duration: 700,
       easing: Easing.inOut(Easing.quad),
       useNativeDriver: false, // animating SVG props, not transforms
     }).start();
-  }, [phase, settle]);
+  }, [phase, phaseValue]);
 
-  const openEyeOpacity = settle.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-  const closedEyeOpacity = settle;
-  const neutralMouthOpacity = settle.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-  const smileMouthOpacity = settle;
-  const blushOpacity = settle.interpolate({ inputRange: [0, 1], outputRange: [0, 0.55] });
-  const auraRadius = settle.interpolate({
-    inputRange: [0, 1],
-    outputRange: [size * 0.42, size * 0.5],
+  const inputRange = [0, 1, 2];
+
+  // Eyes: open + calm on inhale, closed "ᴗ" curve on hold and exhale.
+  const openEyeOpacity = phaseValue.interpolate({ inputRange, outputRange: [1, 0, 0] });
+  const closedEyeOpacity = phaseValue.interpolate({ inputRange, outputRange: [0, 1, 1] });
+
+  // Mouth: rounded "O" (drawing breath in) on inhale, gentle smile on hold + exhale.
+  const mouthOOpacity = phaseValue.interpolate({ inputRange, outputRange: [1, 0, 0] });
+  const smileOpacity = phaseValue.interpolate({ inputRange, outputRange: [0, 1, 1] });
+
+  // Blush: absent on inhale, blooms fullest on hold, recedes a little on exhale.
+  const blushOpacity = phaseValue.interpolate({ inputRange, outputRange: [0, 0.6, 0.38] });
+  const blushScale = phaseValue.interpolate({ inputRange, outputRange: [0.55, 1.15, 0.85] });
+
+  // Aura glow follows the same "bloom on hold" shape as the blush.
+  const auraRadius = phaseValue.interpolate({
+    inputRange,
+    outputRange: [size * 0.42, size * 0.5, size * 0.46],
   });
-  const auraOpacity = settle.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0.85] });
+  const auraOpacity = phaseValue.interpolate({ inputRange, outputRange: [0.5, 0.85, 0.68] });
 
   const cx = size / 2;
   const cy = size / 2;
@@ -72,10 +85,17 @@ export default function BreathingCompanion({ phase, size = 180 }: Props) {
   const eyeOpenRy = size * 0.045;
   const mouthY = size * 0.6;
   const mouthHalfWidth = size * 0.11;
+  const mouthORx = size * 0.045;
+  const mouthORy = size * 0.055;
   const blushY = size * 0.53;
   const blushOffsetX = size * 0.27;
-  const blushRx = size * 0.07;
-  const blushRy = size * 0.045;
+  const blushBaseRx = size * 0.07;
+  const blushBaseRy = size * 0.045;
+
+  // blushScale is an Animated.Value — build rx/ry as animated interpolations
+  // multiplying the base size, so blush grows/shrinks instead of just fading.
+  const blushRx = blushScale.interpolate({ inputRange: [0, 1.15], outputRange: [0, blushBaseRx * 1.15] });
+  const blushRy = blushScale.interpolate({ inputRange: [0, 1.15], outputRange: [0, blushBaseRy * 1.15] });
 
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -90,11 +110,11 @@ export default function BreathingCompanion({ phase, size = 180 }: Props) {
       <AnimatedCircle cx={cx} cy={cy} r={auraRadius} fill="url(#companionAura)" opacity={auraOpacity} />
       <Circle cx={cx} cy={cy} r={size / 2 - 2} fill="none" stroke={colors.sage} strokeWidth={1.5} opacity={0.5} />
 
-      {/* Blush — a small warmth cue that fades in as the face settles */}
+      {/* Blush — grows on hold, eases back a touch on exhale */}
       <AnimatedEllipse cx={cx - blushOffsetX} cy={blushY} rx={blushRx} ry={blushRy} fill={colors.blush} opacity={blushOpacity} />
       <AnimatedEllipse cx={cx + blushOffsetX} cy={blushY} rx={blushRx} ry={blushRy} fill={colors.blush} opacity={blushOpacity} />
 
-      {/* Eyes — cross-fade between "open" (alert) and a friendly closed ᴗ curve (settled) */}
+      {/* Eyes — calm & open on inhale, friendly closed ᴗ curve on hold/exhale */}
       <AnimatedEllipse cx={cx - eyeOffsetX} cy={eyeY} rx={eyeRx} ry={eyeOpenRy} fill={colors.ink} opacity={openEyeOpacity} />
       <AnimatedEllipse cx={cx + eyeOffsetX} cy={eyeY} rx={eyeRx} ry={eyeOpenRy} fill={colors.ink} opacity={openEyeOpacity} />
       <AnimatedPath
@@ -114,24 +134,17 @@ export default function BreathingCompanion({ phase, size = 180 }: Props) {
         opacity={closedEyeOpacity}
       />
 
-      {/* Neutral mouth: soft flat line (inhale) */}
-      <AnimatedPath
-        d={`M ${cx - mouthHalfWidth} ${mouthY} Q ${cx} ${mouthY + 4} ${cx + mouthHalfWidth} ${mouthY}`}
-        stroke={colors.ink}
-        strokeWidth={3}
-        strokeLinecap="round"
-        fill="none"
-        opacity={neutralMouthOpacity}
-      />
+      {/* Mouth — rounded "O" while inhaling */}
+      <AnimatedEllipse cx={cx} cy={mouthY} rx={mouthORx} ry={mouthORy} fill={colors.ink} opacity={mouthOOpacity} />
 
-      {/* Smiling mouth: gentle closed smile (hold / exhale) */}
+      {/* Mouth — gentle closed smile on hold / exhale */}
       <AnimatedPath
         d={`M ${cx - mouthHalfWidth} ${mouthY} Q ${cx} ${mouthY + 16} ${cx + mouthHalfWidth} ${mouthY}`}
         stroke={colors.ink}
         strokeWidth={3}
         strokeLinecap="round"
         fill="none"
-        opacity={smileMouthOpacity}
+        opacity={smileOpacity}
       />
     </Svg>
   );
