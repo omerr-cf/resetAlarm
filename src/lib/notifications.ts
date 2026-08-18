@@ -75,6 +75,11 @@ export async function scheduleDailyReset(hour: number, minute: number): Promise<
       body: 'Your nervous system doesn’t know the difference between a deadline and a tiger. Let’s reset.',
       data: { screen: 'breathing' },
       sound: Platform.OS === 'ios' ? 'default' : undefined,
+      // Asks iOS to treat this as more urgent than a normal notification (can
+      // break through most Focus modes) — the closest we can get to
+      // "alarm-like" using a plain notification. Still not a true alarm; see
+      // the note at the top of this file.
+      ...(Platform.OS === 'ios' ? { interruptionLevel: 'timeSensitive' as const } : {}),
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -104,6 +109,7 @@ export async function sendTestNotification(secondsFromNow: number = 10): Promise
       body: 'If you can see this, reminders are working on this device 🎉',
       data: { screen: 'breathing' },
       sound: Platform.OS === 'ios' ? 'default' : undefined,
+      ...(Platform.OS === 'ios' ? { interruptionLevel: 'timeSensitive' as const } : {}),
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,

@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const STREAK_KEY = 'reset_alarm.streak';
 const LAST_COMPLETED_KEY = 'reset_alarm.last_completed_date';
 const HISTORY_KEY = 'reset_alarm.history_dates'; // JSON array of "YYYY-MM-DD", most recent last
+const REMINDER_KEY = 'reset_alarm.reminder_settings'; // JSON: ReminderSettings
 
 const HISTORY_DAYS_TO_KEEP = 30;
 
@@ -81,4 +82,30 @@ export async function getRecentCompletionDays(
     result.push({ date, completed: history.has(date), isToday: date === today });
   }
   return result;
+}
+
+export type ReminderSettings = {
+  enabled: boolean;
+  hour: number;
+  minute: number;
+};
+
+/**
+ * Whether a daily reminder is currently on, and at what time — persisted so the
+ * Home screen can show "reminder is on" correctly even after the app was fully
+ * closed and reopened. Without this, the UI had no memory of what was actually
+ * scheduled on the OS side, which is exactly why it felt like nothing "stuck."
+ */
+export async function getReminderSettings(): Promise<ReminderSettings | null> {
+  const raw = await AsyncStorage.getItem(REMINDER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ReminderSettings;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveReminderSettings(settings: ReminderSettings): Promise<void> {
+  await AsyncStorage.setItem(REMINDER_KEY, JSON.stringify(settings));
 }

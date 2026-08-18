@@ -1,8 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Haptics from 'expo-haptics';
 import { colors, spacing, radius } from '../theme';
-import { getStreak, getRecentCompletionDays } from '../lib/storage';
+import {
+  getStreak,
+  getRecentCompletionDays,
+  getReminderSettings,
+  saveReminderSettings,
+  ReminderSettings,
+} from '../lib/storage';
 import {
   ensureNotificationPermission,
   scheduleDailyReset,
@@ -24,16 +31,24 @@ const PRESETS: { label: string; hour: number; minute: number }[] = [
   { label: 'Wind-down', hour: 20, minute: 0 },
 ];
 
+function timeFor(hour: number, minute: number): Date {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
 export default function HomeScreen({ onStartReset }: Props) {
   const [streak, setStreak] = useState(0);
   const [recentDays, setRecentDays] = useState<{ date: string; completed: boolean; isToday: boolean }[]>([]);
-  const [time, setTime] = useState<Date>(() => {
-    const d = new Date();
-    d.setHours(7, 30, 0, 0);
-    return d;
-  });
-  const [alarmSet, setAlarmSet] = useState(false);
+  const [time, setTime] = useState<Date>(() => timeFor(7, 30));
+  // The reminder as it actually exists right now (persisted + scheduled) —
+  // separate from `time`, which is just what's currently selected in the
+  // picker. Comparing the two is what lets us show "you have unsaved
+  // changes" instead of leaving the user guessing whether a time they
+  // scrolled to is actually in effect.
+  const [savedReminder, setSavedReminder] = useState<ReminderSettings | null>(null);
   const [showAndroidPicker, setShowAndroidPicker] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(() => {
     getStreak().then(setStreak);
@@ -42,30 +57,59 @@ export default function HomeScreen({ onStartReset }: Props) {
 
   useEffect(() => {
     refresh();
+    getReminderSettings().then((settings) => {
+      if (settings) {
+        setSavedReminder(settings);
+        if (settings.enabled) setTime(timeFor(settings.hour, settings.minute));
+      }
+    });
   }, [refresh]);
 
   function applyPreset(preset: { hour: number; minute: number }) {
-    const d = new Date();
-    d.setHours(preset.hour, preset.minute, 0, 0);
-    setTime(d);
+    setTime(timeFor(preset.hour, preset.minute));
   }
 
-  async function handleSetAlarm() {
-    const granted = await ensureNotificationPermission();
-    if (!granted) {
-      Alert.alert(
-        'Notifications are off',
-        'Turn on notifications in Settings so your daily reset can reach you.'
-      );
-      return;
+  const hasUnsavedChange =
+    !!savedReminder?.enabled &&
+    (savedReminder.hour !== time.getHours() || savedReminder.minute !== time.getMinutes());
+  const isSaved = !!savedReminder?.enabled && !hasUnsavedChange;
+
+  async function handleSaveReminder() {
+    setBusy(true);
+    try {
+      const granted = await ensureNotificationPermission();
+      if (!granted) {
+        Alert.alert(
+          'Notifications are off',
+          'Turn on notifications in Settings so your daily reset can reach you.'
+        );
+        return;
+      }
+      const hour = time.getHours();
+      const minute = time.getMinutes();
+      await scheduleDailyReset(hour, minute);
+      const settings: ReminderSettings = { enabled: true, hour, minute };
+      await saveReminderSettings(settings);
+      setSavedReminder(settings);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert('Reminder saved ✓', `We'll remind you ${describeNextFire(hour, minute)}.`);
+    } finally {
+      setBusy(false);
     }
-    await scheduleDailyReset(time.getHours(), time.getMinutes());
-    setAlarmSet(true);
   }
 
   async function handleCancelAlarm() {
-    await cancelDailyReset();
-    setAlarmSet(false);
+    setBusy(true);
+    try {
+      await cancelDailyReset();
+      const settings: ReminderSettings = { enabled: false, hour: time.getHours(), minute: time.getMinutes() };
+      await saveReminderSettings(settings);
+      setSavedReminder(settings);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      Alert.alert('Reminder turned off', "You won't get a daily notification until you save one again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleTestNotification() {
@@ -116,7 +160,18 @@ export default function HomeScreen({ onStartReset }: Props) {
 
       <View style={styles.divider} />
 
-      <Text style={styles.sectionLabel}>Reminder (optional)</Text>
+      <Text style={styles.sectionLabel}>Reminder — a gentle notification (not a loud alarm yet)</Text>
+
+      {/* Always-visible status — this is the single source of truth for "is
+          something actually scheduled right now," independent of whatever
+          time happens to be selected in the picker below. */}
+      <View style={[styles.statusPill, isSaved ? styles.statusPillOn : styles.statusPillOff]}>
+        <Text style={[styles.statusPillText, isSaved ? styles.statusPillTextOn : styles.statusPillTextOff]}>
+          {isSaved
+            ? `✓ Reminder on — ${describeNextFire(savedReminder!.hour, savedReminder!.minute)}`
+            : 'No reminder set'}
+        </Text>
+      </View>
 
       <View style={styles.presetRow}>
         {PRESETS.map((preset) => (
@@ -157,15 +212,18 @@ export default function HomeScreen({ onStartReset }: Props) {
         </>
       )}
 
-      <Text style={styles.nextFire}>Next reminder: {nextFireLabel}</Text>
+      {!isSaved && <Text style={styles.nextFire}>Will remind you {nextFireLabel}</Text>}
+      {hasUnsavedChange && (
+        <Text style={styles.unsavedNote}>You changed the time — tap Save to update your reminder.</Text>
+      )}
 
-      {alarmSet ? (
-        <Pressable style={styles.secondaryBtn} onPress={handleCancelAlarm}>
-          <Text style={styles.secondaryBtnText}>Cancel reminder</Text>
+      {!isSaved ? (
+        <Pressable style={[styles.saveBtn, busy && styles.btnDisabled]} onPress={handleSaveReminder} disabled={busy}>
+          <Text style={styles.saveBtnText}>{hasUnsavedChange ? 'Update reminder' : 'Save reminder'}</Text>
         </Pressable>
       ) : (
-        <Pressable style={styles.secondaryBtn} onPress={handleSetAlarm}>
-          <Text style={styles.secondaryBtnText}>Set daily reminder</Text>
+        <Pressable style={styles.turnOffLink} onPress={handleCancelAlarm} disabled={busy} hitSlop={8}>
+          <Text style={styles.turnOffLinkText}>Turn off reminder</Text>
         </Pressable>
       )}
 
@@ -174,8 +232,8 @@ export default function HomeScreen({ onStartReset }: Props) {
       </Pressable>
 
       <Text style={styles.note}>
-        Prototype note: this schedules a standard notification, not an unmissable alarm yet. See
-        README.
+        This plays your phone's normal notification sound — it can still be missed in Silent Mode.
+        A true alarm-style ring that breaks through silence is on the roadmap; see the docs folder.
       </Text>
     </View>
   );
@@ -264,6 +322,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.inkSoft,
     marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  statusPill: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+  },
+  statusPillOn: {
+    backgroundColor: colors.successLight,
+    borderColor: colors.success,
+  },
+  statusPillOff: {
+    backgroundColor: colors.card,
+    borderColor: '#dfe6e1',
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  statusPillTextOn: {
+    color: colors.success,
+  },
+  statusPillTextOff: {
+    color: colors.inkSoft,
   },
   presetRow: {
     flexDirection: 'row',
@@ -302,21 +386,44 @@ const styles = StyleSheet.create({
     color: colors.inkSoft,
     marginBottom: spacing.md,
   },
-  secondaryBtn: {
+  unsavedNote: {
+    fontSize: 12,
+    color: colors.warm,
+    fontWeight: '600',
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  saveBtn: {
+    backgroundColor: colors.sage,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.md,
+    marginTop: spacing.xs,
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  turnOffLink: {
     marginTop: spacing.xs,
     paddingVertical: 10,
     paddingHorizontal: spacing.lg,
   },
-  secondaryBtnText: {
-    color: colors.sage,
+  turnOffLinkText: {
+    color: colors.inkSoft,
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 13,
+    textDecorationLine: 'underline',
   },
   testLink: {
     fontSize: 12,
     color: colors.inkSoft,
     textDecorationLine: 'underline',
-    marginTop: spacing.xs,
+    marginTop: spacing.md,
   },
   note: {
     marginTop: spacing.md,

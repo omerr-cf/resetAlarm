@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated, StyleSheet, Pressable } from 'react-native';
+import { View, Text, Animated, Easing, StyleSheet, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing } from '../theme';
 import BreathingCompanion from '../components/BreathingCompanion';
@@ -44,16 +44,19 @@ export default function BreathingScreen({ onComplete, onExit }: Props) {
         Animated.timing(scale, {
           toValue: 1,
           duration: PHASE_DURATIONS_MS.inhale,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(scale, {
           toValue: 1,
           duration: PHASE_DURATIONS_MS.hold,
+          easing: Easing.linear,
           useNativeDriver: true,
         }),
         Animated.timing(scale, {
           toValue: 0.6,
           duration: PHASE_DURATIONS_MS.exhale,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {

@@ -5,6 +5,26 @@ A minimal Expo (React Native + TypeScript) app implementing the core loop we des
 reminder. This is a *prototype for validating the idea*, not a production alarm app — see
 "What's intentionally NOT built yet" below before you show this to anyone as a finished product.
 
+## What changed in v3
+
+- Reminder state is now persisted (`getReminderSettings`/`saveReminderSettings` in
+  `src/lib/storage.ts`), and the Home screen shows an explicit status pill — "✓ Reminder
+  on — Today at 07:30" or "No reminder set" — instead of silently forgetting whether
+  anything was actually scheduled after the app restarted.
+- Changing the time no longer silently does nothing: if you edit the picker while a
+  reminder is active, the UI now says "You changed the time — tap Save to update your
+  reminder" and the button switches to "Update reminder." Saving/turning off now also
+  shows a confirmation alert + haptic tap, so the action is unambiguous.
+- iOS reminders now request `interruptionLevel: 'timeSensitive'` — the closest a plain
+  notification can get to "alarm-like" (can break through most Focus modes) without
+  building the full native alarm engine described below. Still not a true alarm; the
+  in-app copy now says this explicitly instead of implying it's more reliable than it is.
+- Redesigned `BreathingCompanion`: eyes cross-fade to a friendly closed "ᴗ" curve instead
+  of squashing thin, a soft radial-gradient aura glows and grows on hold/exhale, and a
+  faint blush fades in for warmth. The parent scale animation also switched from linear
+  to an eased curve (`Easing.inOut(Easing.sin)`), so the whole thing reads as a natural
+  breath rather than a mechanical pulse.
+
 ## What changed in v2
 
 - Native wheel time picker (`@react-native-community/datetimepicker`, iOS spinner / Android

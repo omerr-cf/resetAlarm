@@ -8,6 +8,9 @@ export const colors = {
   inkSoft: '#5b665f',
   warm: '#d98e6b',
   card: '#ffffff',
+  blush: '#f2c4b3',
+  success: '#5c8a5c',
+  successLight: '#e5f0e5',
 };
 
 export const spacing = {
