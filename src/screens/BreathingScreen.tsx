@@ -109,23 +109,24 @@ export default function BreathingScreen({ onComplete, onExit }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.timer}>{secondsLeft}s</Text>
-
+      {/* The companion is the screen — everything else is quiet supporting
+          text underneath it, not competing for attention. No instructional
+          copy: the phase label + the companion's own motion are enough. */}
       <View style={styles.ringWrap}>
         <Animated.View style={{ transform: [{ scale }] }}>
-          <BreathingCompanion phase={phase} size={220} />
+          <BreathingCompanion phase={phase} size={240} />
         </Animated.View>
       </View>
 
       <Text style={styles.phaseLabel}>{PHASE_LABELS[phase]}</Text>
-      <Text style={styles.helper}>Follow your companion's breath. This will end on its own in a moment.</Text>
+      <Text style={styles.timer}>{secondsLeft}s</Text>
 
       {canSkip ? (
-        <Pressable onPress={onExit} hitSlop={12}>
+        <Pressable onPress={onExit} hitSlop={12} style={styles.skipWrap}>
           <Text style={styles.skip}>End early</Text>
         </Pressable>
       ) : (
-        <View style={{ height: 32 }} />
+        <View style={styles.skipWrap} />
       )}
     </View>
   );
@@ -139,35 +140,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl,
   },
-  timer: {
-    position: 'absolute',
-    top: 72,
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.inkSoft,
-  },
   ringWrap: {
-    width: 220,
-    height: 220,
+    width: 240,
+    height: 240,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.xl,
-  },
-  phaseLabel: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.ink,
-    marginBottom: spacing.sm,
-  },
-  helper: {
-    fontSize: 14,
-    color: colors.inkSoft,
-    textAlign: 'center',
     marginBottom: spacing.lg,
   },
-  skip: {
+  phaseLabel: {
+    fontSize: 19,
+    fontWeight: '600',
+    color: colors.ink,
+    marginBottom: spacing.xs,
+  },
+  timer: {
     fontSize: 13,
+    fontWeight: '500',
     color: colors.inkSoft,
+    opacity: 0.55,
+    marginBottom: spacing.xl,
+  },
+  skipWrap: {
+    height: 32,
+    justifyContent: 'center',
+  },
+  skip: {
+    fontSize: 12,
+    color: colors.inkSoft,
+    opacity: 0.7,
     textDecorationLine: 'underline',
   },
 });

@@ -25,7 +25,7 @@ export default function ResultScreen({ streak, onDone }: Props) {
         await Sharing.shareAsync(uri);
       } else {
         // Fallback for platforms without the native share sheet available
-        await Share.share({ message: 'I just did a 90-second nervous system reset 🌿' });
+        await Share.share({ message: '90 seconds for myself. 🌿' });
       }
     } catch (err) {
       console.warn('Share failed', err);
@@ -36,24 +36,14 @@ export default function ResultScreen({ streak, onDone }: Props) {
 
   return (
     <View style={styles.container}>
+      {/* Quiet completion — no "Congratulations!", no achievement framing.
+          Just a small, still moment, then the artifact. */}
       <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }} style={styles.cardWrap}>
         <View style={styles.card}>
-          <View style={styles.companionWrap}>
-            <BreathingCompanion phase="hold" size={72} />
-          </View>
-          <Text style={styles.badge}>90-SECOND RESET · COMPLETE</Text>
-          <Text style={styles.title}>Nervous system: calmer ✓</Text>
-          <View style={styles.metricsRow}>
-            <View style={styles.metric}>
-              <Text style={styles.metricValue}>{streak}</Text>
-              <Text style={styles.metricLabel}>day streak</Text>
-            </View>
-            <View style={styles.metric}>
-              <Text style={styles.metricValue}>90s</Text>
-              <Text style={styles.metricLabel}>total time</Text>
-            </View>
-          </View>
-          <Text style={styles.footer}>reset-alarm</Text>
+          <BreathingCompanion phase="hold" size={80} />
+          <Text style={styles.eyebrow}>RESET</Text>
+          <Text style={styles.title}>90 seconds{'\n'}for yourself.</Text>
+          {streak > 0 && <Text style={styles.streak}>🔥 {streak}</Text>}
         </View>
       </ViewShot>
 
@@ -79,57 +69,37 @@ const styles = StyleSheet.create({
   cardWrap: {
     marginBottom: spacing.xl,
   },
-  companionWrap: {
-    marginBottom: spacing.sm,
-  },
   card: {
     width: 280,
     backgroundColor: colors.card,
     borderRadius: radius.lg,
-    padding: spacing.xl,
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
     shadowColor: colors.ink,
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
   },
-  badge: {
+  eyebrow: {
     fontSize: 11,
     fontWeight: '700',
     color: colors.sage,
-    letterSpacing: 0.6,
+    letterSpacing: 2,
+    marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '600',
     color: colors.ink,
-    marginBottom: spacing.lg,
     textAlign: 'center',
+    lineHeight: 32,
   },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  metric: {
-    alignItems: 'center',
-  },
-  metricValue: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  metricLabel: {
-    fontSize: 11,
+  streak: {
+    fontSize: 13,
     color: colors.inkSoft,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  footer: {
-    fontSize: 10,
-    color: colors.inkSoft,
-    marginTop: spacing.sm,
+    marginTop: spacing.lg,
   },
   shareBtn: {
     backgroundColor: colors.sage,

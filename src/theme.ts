@@ -1,9 +1,15 @@
-// Shared design tokens — matches the calming sage/sand palette from the landing page
+// Shared design tokens. v2 palette: lighter, airier background (closer to
+// white, still warm — not a stark clinical white) with the green pulled back
+// to a more delicate supporting role. `sage` is kept at its original depth
+// specifically for buttons/text, where it needs to hold contrast against
+// white; `sageWhisper` is the new, much softer green for decorative
+// accents (aura, hairlines) where a bold color would fight the "quiet" goal.
 export const colors = {
   sage: '#7c9885',
-  sageLight: '#e8efe6',
+  sageLight: '#f2f6f2',
+  sageWhisper: '#c3d4c7',
   sageDark: '#6a8674',
-  sand: '#f2e9dc',
+  sand: '#faf8f4',
   ink: '#2f3a33',
   inkSoft: '#5b665f',
   warm: '#d98e6b',
@@ -11,6 +17,7 @@ export const colors = {
   blush: '#f2c4b3',
   success: '#5c8a5c',
   successLight: '#e5f0e5',
+  hairline: '#e9eee9',
 };
 
 export const spacing = {

@@ -102,13 +102,13 @@ export default function BreathingCompanion({ phase, size = 180 }: Props) {
       <Defs>
         <RadialGradient id="companionAura" cx="50%" cy="45%" r="60%">
           <Stop offset="0%" stopColor={colors.sageLight} stopOpacity={1} />
-          <Stop offset="100%" stopColor={colors.sage} stopOpacity={0.25} />
+          <Stop offset="100%" stopColor={colors.sageWhisper} stopOpacity={0.35} />
         </RadialGradient>
       </Defs>
 
       {/* Soft glowing aura — breathes in size + intensity along with the face */}
       <AnimatedCircle cx={cx} cy={cy} r={auraRadius} fill="url(#companionAura)" opacity={auraOpacity} />
-      <Circle cx={cx} cy={cy} r={size / 2 - 2} fill="none" stroke={colors.sage} strokeWidth={1.5} opacity={0.5} />
+      <Circle cx={cx} cy={cy} r={size / 2 - 2} fill="none" stroke={colors.sageWhisper} strokeWidth={1.5} opacity={0.7} />
 
       {/* Blush — grows on hold, eases back a touch on exhale */}
       <AnimatedEllipse cx={cx - blushOffsetX} cy={blushY} rx={blushRx} ry={blushRy} fill={colors.blush} opacity={blushOpacity} />
