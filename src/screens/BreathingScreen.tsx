@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { colors, spacing } from '../theme';
+import { colors, spacing, typography } from '../theme';
 import LottieCompanion from '../components/LottieCompanion';
 import { getCompanionOption, CompanionStyleId } from '../lib/companions';
 import { getCompanionStyle } from '../lib/storage';
@@ -62,7 +62,15 @@ export default function BreathingScreen({ onComplete, onExit }: Props) {
       }
       setPhase((prev) => {
         if (prev !== currentPhase) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          if (prev === 'inhale' && currentPhase === 'hold') {
+            // Inhale peak — the top of the breath.
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          } else if (prev === 'exhale' && currentPhase === 'inhale') {
+            // Exhale end / cycle wrap — a soft completion notch, not a tick.
+            Haptics.selectionAsync().catch(() => {});
+          }
+          // hold -> exhale is left silent on purpose — not every transition
+          // needs its own buzz.
         }
         return currentPhase;
       });
@@ -72,7 +80,8 @@ export default function BreathingScreen({ onComplete, onExit }: Props) {
       if (remaining <= 0 && !doneRef.current) {
         doneRef.current = true;
         clearInterval(interval);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        // Completion haptic fires once, from App.tsx's onComplete handler —
+        // not here too, to avoid a double buzz.
         onComplete();
       }
     }, 200);
@@ -136,16 +145,19 @@ const styles = StyleSheet.create({
   },
   phaseLabel: {
     fontSize: 19,
-    fontWeight: '600',
+    fontWeight: '400',
     color: colors.ink,
     marginBottom: spacing.xs,
+    fontFamily: typography.fontFamily,
   },
   timer: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '300',
     color: colors.inkSoft,
     opacity: 0.55,
     marginBottom: spacing.xl,
+    fontFamily: typography.fontFamily,
+    fontVariant: ['tabular-nums'],
   },
   skipWrap: {
     height: 32,
@@ -153,8 +165,10 @@ const styles = StyleSheet.create({
   },
   skip: {
     fontSize: 12,
+    fontWeight: '300',
     color: colors.inkSoft,
     opacity: 0.7,
     textDecorationLine: 'underline',
+    fontFamily: typography.fontFamily,
   },
 });

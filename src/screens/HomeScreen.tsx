@@ -2,9 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, Platform, Modal, Animated, Easing } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, typography } from '../theme';
 import {
-  getStreak,
   getReminderSettings,
   saveReminderSettings,
   ReminderSettings,
@@ -21,9 +20,12 @@ import {
 } from '../lib/notifications';
 import { COMPANION_OPTIONS, CompanionStyleId } from '../lib/companions';
 import CompanionPicker from '../components/CompanionPicker';
+import PulseCircleButton from '../components/PulseCircleButton';
+import HomeActionTiles from '../components/HomeActionTiles';
+import { ButtonOrigin } from '../lib/transition';
 
 type Props = {
-  onStartReset: () => void;
+  onStartReset: (origin?: ButtonOrigin) => void;
 };
 
 // Quick presets for common "reset moments" — this is a tool for any point in
@@ -45,8 +47,11 @@ const TAGLINES = [
   'One breath at a time.',
   'A quiet place to land.',
   "You don't have to do anything else right now.",
+  'Give yourself 90 seconds.',
 ];
-const TAGLINE_ROTATE_MS = 30000; // every 30s — enough to read it, still feels alive
+const TAGLINE_ROTATE_MS = 9000; // every 9s, per the latest pacing brief
+const TAGLINE_FADE_OUT_MS = 800;
+const TAGLINE_FADE_IN_MS = 1200;
 
 function timeFor(hour: number, minute: number): Date {
   const d = new Date();
@@ -59,7 +64,6 @@ function formatTime(hour: number, minute: number): string {
 }
 
 export default function HomeScreen({ onStartReset }: Props) {
-  const [streak, setStreak] = useState(0);
   const [time, setTime] = useState<Date>(() => timeFor(7, 30));
   // The reminder as it actually exists right now (persisted + scheduled) —
   // separate from `time`, which is just what's currently selected in the
@@ -77,7 +81,6 @@ export default function HomeScreen({ onStartReset }: Props) {
   const taglineTranslateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    getStreak().then(setStreak);
     getReminderSettings().then((settings) => {
       if (settings) {
         setSavedReminder(settings);
@@ -115,18 +118,24 @@ export default function HomeScreen({ onStartReset }: Props) {
   useEffect(() => {
     // A soft "slide up while fading" crossfade — out, swap, in — rather than
     // a flat opacity blink. Small (8px) and slow enough to read as premium,
-    // not flashy.
+    // not flashy. Durations (800ms out / 1200ms in) match the latest pacing
+    // brief's fade-out/fade-in split; implemented with the existing
+    // Animated API rather than adding react-native-reanimated for it — this
+    // project has deliberately stuck to Animated throughout so far
+    // specifically to avoid a new native dependency, and the same visual
+    // result (a slow, smooth crossfade) doesn't need reanimated's FadeIn/
+    // FadeOut presets to achieve.
     const interval = setInterval(() => {
       Animated.parallel([
         Animated.timing(taglineOpacity, {
           toValue: 0,
-          duration: 320,
+          duration: TAGLINE_FADE_OUT_MS,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
         Animated.timing(taglineTranslateY, {
           toValue: -8,
-          duration: 320,
+          duration: TAGLINE_FADE_OUT_MS,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
@@ -136,13 +145,13 @@ export default function HomeScreen({ onStartReset }: Props) {
         Animated.parallel([
           Animated.timing(taglineOpacity, {
             toValue: 1,
-            duration: 380,
+            duration: TAGLINE_FADE_IN_MS,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }),
           Animated.timing(taglineTranslateY, {
             toValue: 0,
-            duration: 380,
+            duration: TAGLINE_FADE_IN_MS,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }),
@@ -213,39 +222,50 @@ export default function HomeScreen({ onStartReset }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Hidden debug hook, not a UI affordance: long-press to peek at the
-          local usage counters (session starts/completions/exits, share
-          taps) while self-testing. No visible hint that this exists — it's
-          a dev tool, not a feature, so it stays completely invisible to
-          real users per the "no dev-facing copy" rule. */}
-      <Pressable onLongPress={handleShowDebugStats} delayLongPress={1200}>
-        <Text style={styles.eyebrow}>90-SECOND RESET</Text>
-      </Pressable>
-      <View style={styles.titleWrap}>
-        <Animated.Text
-          style={[styles.title, { opacity: taglineOpacity, transform: [{ translateY: taglineTranslateY }] }]}
-        >
-          {TAGLINES[taglineIndex]}
-        </Animated.Text>
+      {/* Top header group: eyebrow + rotating headline. */}
+      <View style={styles.topGroup}>
+        {/* Hidden debug hook, not a UI affordance: long-press to peek at the
+            local usage counters (session starts/completions/exits, share
+            taps) while self-testing. No visible hint that this exists —
+            it's a dev tool, not a feature, so it stays completely invisible
+            to real users per the "no dev-facing copy" rule. */}
+        <Pressable onLongPress={handleShowDebugStats} delayLongPress={1200}>
+          <Text style={styles.eyebrow}>90-SECOND RESET</Text>
+        </Pressable>
+        <View style={styles.titleWrap}>
+          <Animated.Text
+            style={[styles.title, { opacity: taglineOpacity, transform: [{ translateY: taglineTranslateY }] }]}
+          >
+            {TAGLINES[taglineIndex]}
+          </Animated.Text>
+        </View>
       </View>
 
-      <Pressable style={styles.primaryBtn} onPress={onStartReset}>
-        <Text style={styles.primaryBtnText}>Take 90 seconds</Text>
-      </Pressable>
+      {/* Central breathing hub — the only graphic in this area is the
+          ripple Lottie inside PulseCircleButton itself; no extra wrapper
+          shapes here. */}
+      <View style={styles.ctaWrap}>
+        <PulseCircleButton onPress={onStartReset} />
+      </View>
 
-      {streak > 0 && <Text style={styles.streakText}>🔥 {streak}</Text>}
+      {/* Streak is deliberately not shown here anymore — Home stays purely
+          about entering a session, no gamification pressure. It's still
+          shown (and now animates a count-up) on ResultScreen after a
+          session completes, which is the only place it lives now. */}
 
-      <Pressable style={styles.reminderRow} onPress={() => setSheetOpen(true)}>
-        <Text style={styles.reminderRowLabel}>Daily reminder</Text>
-        <Text style={styles.reminderRowValue}>
-          {isSaved ? formatTime(savedReminder!.hour, savedReminder!.minute) : 'Off'} ›
-        </Text>
-      </Pressable>
+      {/* Flexible spacer — pushes the action cards down toward the bottom
+          instead of letting the whole screen sit centered as one block. */}
+      <View style={styles.spacer} />
 
-      <Pressable style={styles.reminderRow} onPress={() => setCompanionPickerOpen(true)}>
-        <Text style={styles.reminderRowLabel}>Companion</Text>
-        <Text style={styles.reminderRowValue}>{companionLabel} ›</Text>
-      </Pressable>
+      <View style={styles.bottomGroup}>
+        <HomeActionTiles
+          reminderValueLabel={isSaved ? formatTime(savedReminder!.hour, savedReminder!.minute) : 'Off'}
+          reminderIsSet={isSaved}
+          onPressReminder={() => setSheetOpen(true)}
+          companionLabel={companionLabel}
+          onPressCompanion={() => setCompanionPickerOpen(true)}
+        />
+      </View>
 
       <CompanionPicker
         visible={companionPickerOpen}
@@ -335,68 +355,48 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.sand,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: spacing.xl,
+    // Was a single vertically-centered block; now a top-to-bottom stack
+    // (header -> hub -> CTA text -> streak -> flexible spacer -> cards) so
+    // the action cards can sit pinned near the bottom instead of the whole
+    // screen floating as one centered clump.
+    paddingTop: spacing.xxl + spacing.lg,
+    // Stand-in for a real safe-area bottom inset — this project doesn't
+    // pull in react-native-safe-area-context yet (it's Expo-Go-bundled, so
+    // adding it is low-risk, but it does need an `npm install` on-device
+    // since I can't reach the network from here). A generous static value
+    // clears the home indicator on every current iPhone; happy to wire up
+    // the real thing if the fixed value ever looks off on a specific device.
+    paddingBottom: spacing.xl,
+  },
+  topGroup: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.sage,
-    letterSpacing: 1,
-    marginBottom: spacing.xs,
+    ...typography.eyebrow,
+    marginBottom: spacing.sm,
   },
   titleWrap: {
-    minHeight: 56,
+    minHeight: 72,
     justifyContent: 'center',
-    marginBottom: spacing.xl,
     paddingHorizontal: spacing.md,
   },
   title: {
-    fontSize: 21,
-    fontWeight: '600',
-    color: colors.ink,
+    ...typography.heroHeadline,
     textAlign: 'center',
-    lineHeight: 28,
+    maxWidth: 300,
+    alignSelf: 'center',
   },
-  primaryBtn: {
-    backgroundColor: colors.sage,
-    paddingVertical: 18,
-    paddingHorizontal: spacing.xxl,
-    borderRadius: radius.md,
-    marginBottom: spacing.md,
+  ctaWrap: {
+    marginBottom: 16,
   },
-  primaryBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 18,
+  spacer: {
+    flex: 1,
   },
-  streakText: {
-    fontSize: 14,
-    color: colors.inkSoft,
-    marginBottom: spacing.xxl,
-  },
-  reminderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  bottomGroup: {
     width: '100%',
-    maxWidth: 320,
-    backgroundColor: colors.card,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    marginTop: spacing.sm,
-  },
-  reminderRowLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.ink,
-  },
-  reminderRowValue: {
-    fontSize: 14,
-    color: colors.inkSoft,
+    alignItems: 'center',
   },
   backdrop: {
     flex: 1,
@@ -419,15 +419,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   sheetTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
+    ...typography.cardTitle,
     marginBottom: spacing.xs,
   },
   sheetSubtitle: {
     fontSize: 13,
+    fontWeight: '300',
     color: colors.inkSoft,
     marginBottom: spacing.lg,
+    fontFamily: typography.fontFamily,
   },
   presetRow: {
     flexDirection: 'row',
@@ -445,7 +445,8 @@ const styles = StyleSheet.create({
   presetChipText: {
     fontSize: 12,
     color: colors.ink,
-    fontWeight: '600',
+    fontWeight: '400',
+    fontFamily: typography.fontFamily,
   },
   wheelPicker: {
     height: 140,
@@ -460,20 +461,28 @@ const styles = StyleSheet.create({
   },
   androidTimeBtnText: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '300',
     color: colors.ink,
+    fontFamily: typography.fontFamily,
+    fontVariant: ['tabular-nums'],
   },
   nextFire: {
     fontSize: 12,
+    fontWeight: '300',
     color: colors.inkSoft,
     marginBottom: spacing.sm,
+    fontFamily: typography.fontFamily,
   },
   unsavedNote: {
+    // Kept at 500 (not the 300/400 used elsewhere) — this is a warning-ish
+    // note in the accent `warm` color, and it needs to actually be noticed;
+    // still lighter than the original 600.
     fontSize: 12,
     color: colors.warm,
-    fontWeight: '600',
+    fontWeight: '500',
     marginBottom: spacing.sm,
     textAlign: 'center',
+    fontFamily: typography.fontFamily,
   },
   saveBtn: {
     backgroundColor: colors.sage,
@@ -483,9 +492,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   saveBtnText: {
+    // Filled button — see the note on other screens' shareBtn/buttonText;
+    // 500 is the floor for white-on-sage before it starts looking washed
+    // out.
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: '500',
     fontSize: 15,
+    fontFamily: typography.fontFamily,
   },
   btnDisabled: {
     opacity: 0.6,
@@ -497,29 +510,36 @@ const styles = StyleSheet.create({
   },
   turnOffLinkText: {
     color: colors.inkSoft,
-    fontWeight: '600',
+    fontWeight: '400',
     fontSize: 13,
     textDecorationLine: 'underline',
+    fontFamily: typography.fontFamily,
   },
   testLink: {
     fontSize: 12,
+    fontWeight: '300',
     color: colors.inkSoft,
     textDecorationLine: 'underline',
     marginTop: spacing.sm,
+    fontFamily: typography.fontFamily,
   },
   note: {
     marginTop: spacing.sm,
     fontSize: 11,
+    fontWeight: '300',
     color: colors.inkSoft,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
+    fontFamily: typography.fontFamily,
   },
   closeLink: {
     marginTop: spacing.md,
   },
   closeLinkText: {
     fontSize: 13,
+    fontWeight: '300',
     color: colors.inkSoft,
     opacity: 0.7,
+    fontFamily: typography.fontFamily,
   },
 });

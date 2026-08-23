@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, typography } from '../theme';
 import LottieCompanion from '../components/LottieCompanion';
 import { getCompanionOption, CompanionStyleId } from '../lib/companions';
 import { getCompanionStyle } from '../lib/storage';
@@ -57,16 +57,19 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontWeight: '600',
+    fontWeight: '300',
     color: colors.ink,
     textAlign: 'center',
     marginBottom: spacing.xs,
+    fontFamily: typography.fontFamily,
   },
   subtitle: {
     fontSize: 14,
+    fontWeight: '300',
     color: colors.inkSoft,
     textAlign: 'center',
     marginBottom: spacing.xxl,
+    fontFamily: typography.fontFamily,
   },
   button: {
     backgroundColor: colors.sage,
@@ -75,8 +78,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   buttonText: {
+    // Filled button — see the note on ResultScreen's shareBtnText; 500 is
+    // the floor for white-on-sage before it starts looking washed out.
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: '500',
     fontSize: 16,
+    fontFamily: typography.fontFamily,
   },
 });

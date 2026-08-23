@@ -10,7 +10,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, typography } from '../theme';
 import LottieCompanion from './LottieCompanion';
 import { COMPANION_OPTIONS, CompanionStyleId } from '../lib/companions';
 
@@ -117,14 +117,13 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     fontSize: 14,
+    fontWeight: '300',
     color: colors.inkSoft,
     opacity: 0.8,
+    fontFamily: typography.fontFamily,
   },
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.sage,
-    letterSpacing: 2,
+    ...typography.eyebrow,
     marginBottom: spacing.xl,
   },
   pager: {
@@ -144,8 +143,9 @@ const styles = StyleSheet.create({
   },
   optionLabel: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '400',
     color: colors.ink,
+    fontFamily: typography.fontFamily,
   },
   dots: {
     flexDirection: 'row',
@@ -174,8 +174,12 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   selectBtnText: {
+    // Filled button — see the note on other screens' shareBtn/buttonText;
+    // 500 is the floor for white-on-sage before it starts looking washed
+    // out.
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: '500',
     fontSize: 15,
+    fontFamily: typography.fontFamily,
   },
 });
