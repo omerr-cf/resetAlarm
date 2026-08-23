@@ -8,6 +8,9 @@ import {
   getReminderSettings,
   saveReminderSettings,
   ReminderSettings,
+  getCompanionStyle,
+  saveCompanionStyle,
+  getUsageStats,
 } from '../lib/storage';
 import {
   ensureNotificationPermission,
@@ -16,6 +19,8 @@ import {
   sendTestNotification,
   describeNextFire,
 } from '../lib/notifications';
+import { COMPANION_OPTIONS, CompanionStyleId } from '../lib/companions';
+import CompanionPicker from '../components/CompanionPicker';
 
 type Props = {
   onStartReset: () => void;
@@ -64,6 +69,8 @@ export default function HomeScreen({ onStartReset }: Props) {
   const [showAndroidPicker, setShowAndroidPicker] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [companionId, setCompanionId] = useState<CompanionStyleId>('flower');
+  const [companionPickerOpen, setCompanionPickerOpen] = useState(false);
 
   const [taglineIndex, setTaglineIndex] = useState(() => Math.floor(Math.random() * TAGLINES.length));
   const taglineOpacity = useRef(new Animated.Value(1)).current;
@@ -77,7 +84,33 @@ export default function HomeScreen({ onStartReset }: Props) {
         if (settings.enabled) setTime(timeFor(settings.hour, settings.minute));
       }
     });
+    getCompanionStyle().then(setCompanionId);
   }, []);
+
+  async function handleSelectCompanion(id: CompanionStyleId) {
+    setCompanionId(id);
+    await saveCompanionStyle(id);
+    Haptics.selectionAsync().catch(() => {});
+    setCompanionPickerOpen(false);
+  }
+
+  const companionLabel = COMPANION_OPTIONS.find((o) => o.id === companionId)?.label ?? 'Bloom';
+
+  async function handleShowDebugStats() {
+    const stats = await getUsageStats();
+    const completionRate =
+      stats.sessionsStarted > 0
+        ? Math.round((stats.sessionsCompleted / stats.sessionsStarted) * 100)
+        : 0;
+    const shareRate =
+      stats.sessionsCompleted > 0
+        ? Math.round((stats.shareTapped / stats.sessionsCompleted) * 100)
+        : 0;
+    Alert.alert(
+      'Local usage stats (this device)',
+      `Started: ${stats.sessionsStarted}\nCompleted: ${stats.sessionsCompleted}\nExited early: ${stats.sessionsExitedEarly}\nShare tapped: ${stats.shareTapped}\n\nCompletion rate: ${completionRate}% (target ≥70%)\nShare rate: ${shareRate}% (target ≥30%)`
+    );
+  }
 
   useEffect(() => {
     // A soft "slide up while fading" crossfade — out, swap, in — rather than
@@ -180,7 +213,14 @@ export default function HomeScreen({ onStartReset }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.eyebrow}>90-SECOND RESET</Text>
+      {/* Hidden debug hook, not a UI affordance: long-press to peek at the
+          local usage counters (session starts/completions/exits, share
+          taps) while self-testing. No visible hint that this exists — it's
+          a dev tool, not a feature, so it stays completely invisible to
+          real users per the "no dev-facing copy" rule. */}
+      <Pressable onLongPress={handleShowDebugStats} delayLongPress={1200}>
+        <Text style={styles.eyebrow}>90-SECOND RESET</Text>
+      </Pressable>
       <View style={styles.titleWrap}>
         <Animated.Text
           style={[styles.title, { opacity: taglineOpacity, transform: [{ translateY: taglineTranslateY }] }]}
@@ -201,6 +241,18 @@ export default function HomeScreen({ onStartReset }: Props) {
           {isSaved ? formatTime(savedReminder!.hour, savedReminder!.minute) : 'Off'} ›
         </Text>
       </Pressable>
+
+      <Pressable style={styles.reminderRow} onPress={() => setCompanionPickerOpen(true)}>
+        <Text style={styles.reminderRowLabel}>Companion</Text>
+        <Text style={styles.reminderRowValue}>{companionLabel} ›</Text>
+      </Pressable>
+
+      <CompanionPicker
+        visible={companionPickerOpen}
+        selected={companionId}
+        onSelect={handleSelectCompanion}
+        onClose={() => setCompanionPickerOpen(false)}
+      />
 
       <Modal visible={sheetOpen} transparent animationType="slide" onRequestClose={() => setSheetOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setSheetOpen(false)} />
@@ -335,6 +387,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.hairline,
+    marginTop: spacing.sm,
   },
   reminderRowLabel: {
     fontSize: 14,

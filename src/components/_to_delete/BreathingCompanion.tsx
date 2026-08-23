@@ -21,14 +21,14 @@ import { colors } from '../theme';
  * - **Exhale**: same relaxed eyes/smile as hold, but blush recedes a little
  *   — reads as a soft release rather than a flat repeat of "hold."
  *
- * Why SVG + Animated instead of Lottie: this animation's whole point is
- * being frame-synced to the *actual* inhale/hold/exhale timers running in
- * BreathingScreen (4s/2s/6s), which can change. Lottie is at its best as a
- * pre-baked, self-contained loop (e.g. a one-shot celebration burst) —
- * driving one from external, variable-duration JS state means fighting the
- * format rather than benefiting from it. This component gets the same
- * "designed motion" feel while staying perfectly in sync, fully
- * type-checked, and dependency-free.
+ * Why SVG + Animated instead of Lottie: our 4s/2s/6s cycle is actually a
+ * fixed 12s loop (not variable), so a well-made Lottie file would sync
+ * here too — that's not the blocker. The real trade-offs are cost (a good
+ * custom Lottie means either a paid AI generator or hand-editing a free
+ * library template that won't have this exact expression logic) and
+ * control (this component is free, fully bespoke to the brief, and every
+ * tweak is a code change + `tsc` check away — no external tool round-trip).
+ * Worth revisiting if/when there's a real design budget for it.
  */
 
 const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
@@ -77,6 +77,17 @@ export default function BreathingCompanion({ phase, size = 180 }: Props) {
   });
   const auraOpacity = phaseValue.interpolate({ inputRange, outputRange: [0.5, 0.85, 0.68] });
 
+  // A quiet "release" ring — sits close to the face through inhale/hold,
+  // then eases outward and fades during exhale, like a slow ripple. Reads
+  // as a physical release rather than a decorative loop.
+  // Kept within the canvas edge (no viewBox overflow/clipping risk) — the
+  // motion is meant to be a quiet nudge, not a dramatic expansion anyway.
+  const ringRadius = phaseValue.interpolate({
+    inputRange,
+    outputRange: [size * 0.42, size * 0.42, size * 0.48],
+  });
+  const ringOpacity = phaseValue.interpolate({ inputRange, outputRange: [0.35, 0.35, 0] });
+
   const cx = size / 2;
   const cy = size / 2;
   const eyeOffsetX = size * 0.16;
@@ -108,6 +119,10 @@ export default function BreathingCompanion({ phase, size = 180 }: Props) {
 
       {/* Soft glowing aura — breathes in size + intensity along with the face */}
       <AnimatedCircle cx={cx} cy={cy} r={auraRadius} fill="url(#companionAura)" opacity={auraOpacity} />
+
+      {/* Release ring — a quiet outward ripple during exhale */}
+      <AnimatedCircle cx={cx} cy={cy} r={ringRadius} fill="none" stroke={colors.sageWhisper} strokeWidth={1.5} opacity={ringOpacity} />
+
       <Circle cx={cx} cy={cy} r={size / 2 - 2} fill="none" stroke={colors.sageWhisper} strokeWidth={1.5} opacity={0.7} />
 
       {/* Blush — grows on hold, eases back a touch on exhale */}

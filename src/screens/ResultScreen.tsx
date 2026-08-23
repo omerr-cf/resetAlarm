@@ -1,9 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Share } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { colors, spacing, radius } from '../theme';
-import BreathingCompanion from '../components/BreathingCompanion';
+import LottieCompanion from '../components/LottieCompanion';
+import { getCompanionOption, CompanionStyleId } from '../lib/companions';
+import { getCompanionStyle, incrementUsageStat } from '../lib/storage';
 
 type Props = {
   streak: number;
@@ -13,8 +15,18 @@ type Props = {
 export default function ResultScreen({ streak, onDone }: Props) {
   const shotRef = useRef<ViewShot>(null);
   const [sharing, setSharing] = useState(false);
+  const [companionId, setCompanionId] = useState<CompanionStyleId>('flower');
+
+  useEffect(() => {
+    getCompanionStyle().then(setCompanionId);
+  }, []);
+
+  const companionOption = getCompanionOption(companionId);
 
   async function handleShare() {
+    // Count the tap itself, not whether the OS share sheet was completed —
+    // "wanted to share" is the signal the MVP plan cares about (≥30% target).
+    incrementUsageStat('shareTapped').catch(() => {});
     try {
       setSharing(true);
       const uri = await shotRef.current?.capture?.();
@@ -40,7 +52,7 @@ export default function ResultScreen({ streak, onDone }: Props) {
           Just a small, still moment, then the artifact. */}
       <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }} style={styles.cardWrap}>
         <View style={styles.card}>
-          <BreathingCompanion phase="hold" size={80} />
+          <LottieCompanion source={companionOption.source} speed={companionOption.speed} size={80} />
           <Text style={styles.eyebrow}>RESET</Text>
           <Text style={styles.title}>90 seconds{'\n'}for yourself.</Text>
           {streak > 0 && <Text style={styles.streak}>🔥 {streak}</Text>}

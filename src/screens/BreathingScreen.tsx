@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated, Easing, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing } from '../theme';
-import BreathingCompanion from '../components/BreathingCompanion';
+import LottieCompanion from '../components/LottieCompanion';
+import { getCompanionOption, CompanionStyleId } from '../lib/companions';
+import { getCompanionStyle } from '../lib/storage';
 
 type Phase = 'inhale' | 'hold' | 'exhale';
 
@@ -27,49 +29,21 @@ type Props = {
 };
 
 export default function BreathingScreen({ onComplete, onExit }: Props) {
-  const scale = useRef(new Animated.Value(0.6)).current;
   const [phase, setPhase] = useState<Phase>('inhale');
   const [secondsLeft, setSecondsLeft] = useState(Math.ceil(TOTAL_DURATION_MS / 1000));
   const [canSkip, setCanSkip] = useState(false);
+  const [companionId, setCompanionId] = useState<CompanionStyleId>('flower');
   const startRef = useRef<number>(Date.now());
   const doneRef = useRef(false);
 
-  // Drive the breathing animation in a continuous loop of inhale -> hold -> exhale
   useEffect(() => {
-    let cancelled = false;
+    getCompanionStyle().then(setCompanionId);
+  }, []);
 
-    function runCycle() {
-      if (cancelled) return;
-      Animated.sequence([
-        Animated.timing(scale, {
-          toValue: 1,
-          duration: PHASE_DURATIONS_MS.inhale,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scale, {
-          toValue: 1,
-          duration: PHASE_DURATIONS_MS.hold,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scale, {
-          toValue: 0.6,
-          duration: PHASE_DURATIONS_MS.exhale,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]).start(({ finished }) => {
-        if (finished && !cancelled) runCycle();
-      });
-    }
-    runCycle();
-    return () => {
-      cancelled = true;
-    };
-  }, [scale]);
-
-  // Track elapsed time -> current phase label, countdown, skip-unlock, completion
+  // Track elapsed time -> current phase label, countdown, skip-unlock, completion.
+  // The companion's own Lottie loop (speed-matched to our 12s cycle in
+  // lib/companions.ts) carries all the visual breathing motion now — this
+  // timer just drives the phase label text, haptics, and the countdown.
   useEffect(() => {
     const interval = setInterval(() => {
       const elapsed = Date.now() - startRef.current;
@@ -107,27 +81,34 @@ export default function BreathingScreen({ onComplete, onExit }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const companionOption = getCompanionOption(companionId);
+
   return (
     <View style={styles.container}>
-      {/* The companion is the screen — everything else is quiet supporting
-          text underneath it, not competing for attention. No instructional
-          copy: the phase label + the companion's own motion are enough. */}
-      <View style={styles.ringWrap}>
-        <Animated.View style={{ transform: [{ scale }] }}>
-          <BreathingCompanion phase={phase} size={240} />
-        </Animated.View>
+      {/* Full-bleed companion — fills the entire screen edge to edge above
+          the text block below, so it reads as the whole screen rather than
+          a small centered icon. */}
+      <View style={styles.companionWrap}>
+        <LottieCompanion
+          source={companionOption.source}
+          speed={companionOption.speed}
+          style={styles.companionFill}
+          resizeMode="cover"
+        />
       </View>
 
-      <Text style={styles.phaseLabel}>{PHASE_LABELS[phase]}</Text>
-      <Text style={styles.timer}>{secondsLeft}s</Text>
+      <View style={styles.bottomBlock}>
+        <Text style={styles.phaseLabel}>{PHASE_LABELS[phase]}</Text>
+        <Text style={styles.timer}>{secondsLeft}s</Text>
 
-      {canSkip ? (
-        <Pressable onPress={onExit} hitSlop={12} style={styles.skipWrap}>
-          <Text style={styles.skip}>End early</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.skipWrap} />
-      )}
+        {canSkip ? (
+          <Pressable onPress={onExit} hitSlop={12} style={styles.skipWrap}>
+            <Text style={styles.skip}>End early</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.skipWrap} />
+        )}
+      </View>
     </View>
   );
 }
@@ -136,16 +117,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.sand,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
   },
-  ringWrap: {
-    width: 240,
-    height: 240,
+  companionWrap: {
+    flex: 1,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  companionFill: {
+    width: '100%',
+    height: '100%',
+  },
+  bottomBlock: {
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.sand,
   },
   phaseLabel: {
     fontSize: 19,
